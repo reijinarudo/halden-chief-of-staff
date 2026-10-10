@@ -24,6 +24,7 @@ import os
 import socket
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -39,6 +40,88 @@ CONFIG_PATH = Path(os.environ.get("FACE_WIDGET_CONFIG")
                    or (HERE / "face-widget.json"))
 LOCK_PATH = HERE / ".widget.lock"
 LOG_PATH = HERE / "widget.log"
+
+
+SYS_POLL_S = 1.0          # how often the machine is sampled
+SYS_PUSH_MS = 1000        # how often the page is told
+
+
+class SysStats:
+    """Machine numbers for the face's corner labels, sampled off the UI
+    thread.
+
+    The labels upstream draws (CORE 01, AUX FEED, SYS LINK) are set
+    dressing. These make three of them real.
+
+    A daemon thread samples; the UI only ever reads the last dict it
+    produced. That split is the point: psutil and NVML both talk to the
+    OS and can block for as long as they like, and anything that blocks
+    on the UI thread freezes the ring mid-frame. A stalled reading now
+    costs a stale number instead of a stuttering face.
+
+    Both libraries are OPTIONAL. Without them `read()` returns an empty
+    dict, the page sees no values, and every label falls back to its
+    original string. That keeps a checkout with no extra packages, and
+    anyone running the face in a plain browser, working exactly as
+    before.
+    """
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._vals = {}
+        self._stop = threading.Event()
+        self._psutil = None
+        self._nvml = None
+        self._nvml_handle = None
+
+        try:
+            import psutil
+            self._psutil = psutil
+            # First call establishes the baseline and returns 0.0; every
+            # later call is non-blocking and measures since this one.
+            psutil.cpu_percent(interval=None)
+        except Exception as e:
+            log(f"[sys] psutil unavailable, CPU and memory stay static: {e!r}")
+
+        try:
+            import pynvml
+            pynvml.nvmlInit()
+            self._nvml = pynvml
+            self._nvml_handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+        except Exception as e:
+            log(f"[sys] NVML unavailable, GPU label stays static: {e!r}")
+
+        if self._psutil or self._nvml:
+            t = threading.Thread(target=self._loop, daemon=True,
+                                 name="sysstats")
+            t.start()
+
+    def _loop(self):
+        while not self._stop.wait(SYS_POLL_S):
+            vals = {}
+            if self._psutil:
+                try:
+                    vals["cpu"] = f"CPU {self._psutil.cpu_percent(interval=None):.0f}%"
+                    vals["mem"] = f"MEM {self._psutil.virtual_memory().percent:.0f}%"
+                except Exception:
+                    pass                      # keep the last good reading
+            if self._nvml:
+                try:
+                    u = self._nvml.nvmlDeviceGetUtilizationRates(
+                        self._nvml_handle)
+                    vals["gpu"] = f"GPU {u.gpu:.0f}%"
+                except Exception:
+                    pass
+            if vals:
+                with self._lock:
+                    self._vals = vals
+
+    def read(self):
+        with self._lock:
+            return dict(self._vals)
+
+    def stop(self):
+        self._stop.set()
 
 
 def log(msg):
@@ -213,6 +296,12 @@ class FaceWidget(QWidget):
 
         self.view = QWebEngineView(self)
         self.view.page().setBackgroundColor(Qt.transparent)
+        # Chromium ships its own right-click menu (Reload, Save page, View
+        # page source), which is meaningless on a face and was racing the
+        # widget's menu for the same click: whichever won was luck, and
+        # losing it meant no way to reach Quit without the tray. Switching
+        # it off lets the event reach contextMenuEvent below every time.
+        self.view.setContextMenuPolicy(Qt.NoContextMenu)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.addWidget(self.view)
@@ -232,6 +321,16 @@ class FaceWidget(QWidget):
         self._restore_position(size)
         self.load_face()
 
+        # Live corner labels. The sampler runs whether or not the page is
+        # ready; runJavaScript on a page that has not loaded is harmless,
+        # and the face draws its fallback strings until the first push
+        # lands, so there is no ordering to get right here.
+        self._sys = SysStats()
+        self._sys_push = QTimer(self)
+        self._sys_push.setInterval(SYS_PUSH_MS)
+        self._sys_push.timeout.connect(self._push_sys)
+        self._sys_push.start()
+
         # QWebEngineView keeps a private child widget that takes the mouse
         # first, so the drag has to be caught on that child, not on self.
         QTimer.singleShot(0, self._grab_mouse_events)
@@ -241,6 +340,21 @@ class FaceWidget(QWidget):
         url = (f"http://127.0.0.1:{int(self.cfg['port'])}"
                f"/faces/{self.cfg['face']}/")
         self.view.load(QUrl(url))
+
+    def _push_sys(self):
+        """Hand the latest sample to the page as `window.SYS`.
+
+        Reload safe by construction: this writes the whole object every
+        second, so a face that has just reloaded is repopulated on the
+        next tick rather than being left with the labels blank."""
+        vals = self._sys.read()
+        if not vals:
+            return
+        try:
+            self.view.page().runJavaScript(f"window.SYS={json.dumps(vals)};")
+        except Exception as e:
+            log(f"[sys] push failed, stopping the pusher: {e!r}")
+            self._sys_push.stop()
 
     def _grab_mouse_events(self):
         proxy = self.view.focusProxy()
@@ -268,6 +382,18 @@ class FaceWidget(QWidget):
                    for s in QApplication.screens())
 
     # ---------------------------------------------------------------- input
+    def contextMenuEvent(self, ev):
+        """The menu, reached directly rather than through the filter.
+
+        With Chromium's own menu switched off the event propagates here
+        from the view, so this fires whether or not the event filter got
+        attached to the web view's private child. The filter's own
+        ContextMenu branch stays as well: either route opens the same
+        menu, and the one that no longer depends on a startup race is
+        this one."""
+        self.show_menu(ev.globalPos())
+        ev.accept()
+
     def eventFilter(self, obj, ev):
         t = ev.type()
         if t == QEvent.MouseButtonPress and ev.button() == Qt.LeftButton:

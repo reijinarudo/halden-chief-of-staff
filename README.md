@@ -53,12 +53,18 @@ line.
 | uv | 0.12.6, used by the voice line |
 | Claude Code | The agent runtime, and it must be signed in. See below. |
 | PySide6 | 6.11.2, the face widget only |
+| psutil | 7.2.2, optional, for the CPU and memory labels |
+| nvidia-ml-py | 13.615.71, optional, for the GPU label. NVIDIA only. |
 | Chrome | Required by the hand tracking board |
 | NVIDIA CUDA runtime | Optional, via the `nvidia-*-cu12` pip wheels |
 
 The upstream packages are pinned to exact commits in the install script, so a
 fresh install matches the versions this was built and tested against. The
-widget pins its one dependency in `face-widget/requirements.txt`.
+widget pins its dependencies in `face-widget/requirements.txt`.
+
+The two optional ones only feed the widget's corner labels. Without them the
+widget runs exactly as before and those labels show fixed strings instead of
+live readings.
 
 ### You need your own Claude Code account
 
@@ -244,6 +250,17 @@ Older versions failed silently here. The patched `brain.py` in `overlay/`
 speaks the error aloud instead, so you should now hear the reason rather than
 guess at it.
 
+### A session ends on its own
+
+Check `backtalk/logs/console.log`. A traceback never reaches `backtalk.log`,
+because that file is written by the application's own logger, which an
+exception kills on its way past. `console.log` captures stderr instead, with a
+banner per launch.
+
+Also worth ruling out: the quit check is a substring match, so any phrase from
+`quit_phrases` appearing anywhere in a sentence ends the session. "Hang up" in
+the middle of an ordinary remark will do it.
+
 ### Nothing is heard at all
 
 Check which microphone it opened. The log names it at startup:
@@ -348,6 +365,26 @@ written up in `face-widget/README.md`.
 This component is entirely mine and depends on nothing of his at the source
 level. It talks to his visualizer over HTTP and the file based signal bus.
 
+**Live corner labels.** The widget samples the machine on a background thread
+and pushes the readings into the page once a second, which is what makes three
+of the four corner labels real. The sampling is deliberately off the UI thread:
+psutil and NVML both talk to the operating system and can block for as long as
+they like, and anything that blocks the UI thread freezes the ring mid frame. A
+stalled reading costs a stale number instead of a stuttering face.
+
+Both libraries are optional. Without them the widget behaves exactly as before
+and the labels show their original fixed strings, so a checkout that skips them
+is less interesting rather than broken. That matters on a machine with no
+NVIDIA card, where NVML does not exist at all.
+
+**Chromium's context menu is switched off** on the web view. It offered Reload,
+Save page and View page source, which are meaningless on a face, and it was
+racing the widget's own menu for the same right click. Whichever won was luck,
+and losing it left no way to reach Quit except the tray icon. The widget now
+also handles the menu directly rather than only through an event filter
+attached to the web view's private child at startup, so the menu no longer
+depends on winning that attachment.
+
 ### Visual display: a transparent face
 
 The four faces all paint a full bleed background, which gives an opaque
@@ -357,7 +394,7 @@ radial face with the background removed. It is a new folder rather than an
 edit to his, because the server discovers faces by scanning the folder, so a
 new one never collides with an upstream update.
 
-Eleven changes from the original, listed in full in the file's own header: a
+Twelve changes from the original, listed in full in the file's own header: a
 transparent background and a move cursor, sound disabled so the voice line
 owns the thinking sound, the galaxy backdrop deleted, a clearRect in place of
 the background fill, the alert wash confined to a circle instead of covering
@@ -365,6 +402,25 @@ the canvas, a semi transparent backing disc behind the orb so it keeps
 contrast over a bright desktop, the fullscreen key removed, corner labels
 hidden at small sizes, and a scale factor so the drawing fits inside the
 canvas instead of overshooting its edges.
+
+**The twelfth is the corner labels.** Upstream draws four fixed strings around
+the ring, `NEURAL NET`, `SYS LINK`, `CORE 01` and `AUX FEED`. They are set
+dressing and say nothing. Each slot now shows a real value:
+
+| Slot | Shows | Source |
+| --- | --- | --- |
+| `NEURAL NET` | `IDLE`, `LISTENING`, `THINKING`, `SPEAKING` | `AV.state`, the signal bus the face already reads |
+| `SYS LINK` | GPU load | NVML, through the widget |
+| `CORE 01` | CPU load | psutil, through the widget |
+| `AUX FEED` | Memory in use | psutil, through the widget |
+
+The state label needed no new plumbing at all. The face already reads that
+value to animate itself, so it now says in a word what the graphics were
+already showing, and it works in a plain browser tab as well as in the widget.
+
+Every slot falls back to its original string when nothing is feeding it, so
+this file still renders correctly in a browser with no widget attached, and on
+a machine without psutil or an NVIDIA card.
 
 The file keeps his copyright notice and AGPL header. `face.json` beside it is
 new, and holds the face's title and description for the gallery.
@@ -436,6 +492,16 @@ browser visualizer when it is not. It also gained a single instance guard for
 the voice line, ported from the upstream shell script, which already had one.
 Two voice processes answer the same microphone, and the newer one dies without
 saying why.
+
+**It now keeps stderr.** A traceback goes to the console and nowhere else:
+`backtalk.log` is written by the application's own logger and never sees an
+exception that kills it. So the one message explaining why a session ended
+lives only in a console window which, on a multi monitor desk, is routinely
+lost off screen. Three sessions ended in one afternoon with no cause recorded
+anywhere, for exactly that reason. Stderr is now appended to
+`backtalk/logs/console.log` with a timestamped banner per launch, so a crash
+stays readable after the next start. Only stderr is redirected, so the live
+transcript still reads normally in the window.
 
 ### Operating rules and persona
 

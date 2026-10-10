@@ -1,2 +1,10 @@
-# PySide6 is the whole dependency list. Pinned to the version this runs on.
+# The widget itself. Pinned to the version this runs on.
 PySide6==6.11.2
+
+# OPTIONAL, for the live corner labels. Without these the widget runs
+# exactly as before and the labels show their original fixed strings,
+# so a checkout that skips them is not broken, only less interesting.
+#   psutil       CPU and memory
+#   nvidia-ml-py GPU load, NVIDIA only. Imports as `pynvml`.
+psutil==7.2.2
+nvidia-ml-py==13.615.71

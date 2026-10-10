@@ -75,13 +75,26 @@ if exist "backtalk\" (
   rem Self-repair: reconcile the voice line's packages before launch
   rem (fast when current; heals a half-installed environment).
   uv sync -q --inexact >nul 2>nul
-  uv run python -m backtalk.main
+  rem Keep stderr. A traceback goes to the console and NOWHERE else:
+  rem backtalk.log is written by the app's own logger and never sees an
+  rem exception that kills it. So the one message explaining why a
+  rem session ended lives only in a console window that, on a multi
+  rem monitor desk, is routinely lost off screen. On 2026-10-10 three
+  rem sessions ended with no cause recorded anywhere, for that reason.
+  rem Appended, not overwritten, so a crash is still readable after the
+  rem next launch. Only stderr is redirected: stdout stays on screen so
+  rem the live transcript still reads normally in the window.
+  if not exist "logs\" mkdir "logs" 2>nul
+  echo. >> "logs\console.log"
+  echo ===== launched %DATE% %TIME% ===== >> "logs\console.log"
+  uv run python -m backtalk.main 2>> "logs\console.log"
   rem A clean goodbye exits 0 and the window may close. An error exits
   rem nonzero, and the window HOLDS so the message can be read.
   if errorlevel 1 (
     echo.
-    echo   The voice line stopped with an error. The message is above.
-    echo   The log lives in backtalk\logs\backtalk.log
+    echo   The voice line stopped with an error.
+    echo   Why it stopped:  backtalk\logs\console.log
+    echo   What it heard:   backtalk\logs\backtalk.log
     pause
   )
 )

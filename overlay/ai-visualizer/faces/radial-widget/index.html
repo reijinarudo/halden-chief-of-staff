@@ -51,9 +51,19 @@ The complete diff from faces/radial/index.html:
                              overshoots the edge is invisible; in a
                              transparent widget it draws the square. Pairs
                              with the widget's `size` key.
+ 12. corner labels        -> live, not set dressing. Upstream draws four
+                             fixed strings (NEURAL NET, SYS LINK, CORE 01,
+                             AUX FEED). Each slot now shows a real value
+                             when it has one: the agent's state from
+                             AV.state, and CPU, memory and GPU from
+                             window.SYS, which face-widget pushes in once
+                             a second. Each falls back to its original
+                             string when no source is present, so this
+                             file still renders correctly in a plain
+                             browser with nothing feeding it.
 
 If upstream changes faces/radial in a way worth having, re-derive rather
-than hand-merging: copy it again and reapply these eleven points.
+than hand-merging: copy it again and reapply these twelve points.
 -->
 <html lang="en">
 <head>
@@ -648,9 +658,26 @@ function frame(dt){
     ctx.font=orbFont;ctx.fillStyle="rgb(110,220,150)";
     ctx.textAlign="center";ctx.textBaseline="middle";
     if(Math.min(W,H)>=320){
-      for(const[txt,ang]of[["NEURAL NET",-60],["SYS LINK",30],["CORE 01",120],["AUX FEED",210]]){
+      // LIVE CORNER LABELS. Upstream draws four fixed strings here as set
+      // dressing. Each slot now shows something real when a source for it
+      // exists, and falls back to its original string when one does not,
+      // so this face still renders correctly in a plain browser with no
+      // widget feeding it.
+      //
+      //   state  comes from AV.state, the signal bus the face already
+      //          reads to animate itself. No new plumbing, and it works
+      //          in a browser tab as well as in the widget.
+      //   cpu/mem/gpu  come from window.SYS, which face-widget's
+      //          widget.py pushes in once a second. Absent in a browser.
+      const S=window.SYS||{};
+      const st=(typeof AV!=="undefined"&&AV.state)?String(AV.state).toUpperCase():null;
+      for(const[def,ang,val]of[["NEURAL NET",-60,st],
+                               ["SYS LINK",30,S.gpu],
+                               ["CORE 01",120,S.cpu],
+                               ["AUX FEED",210,S.mem]]){
         const a=ang*Math.PI/180;
-        ctx.fillText(txt,cxp+Math.cos(a)*rRing*1.22,cyp+Math.sin(a)*rRing*1.22);
+        ctx.fillText(val==null?def:String(val),
+                     cxp+Math.cos(a)*rRing*1.22,cyp+Math.sin(a)*rRing*1.22);
       }
     }
     ctx.textAlign="left";ctx.textBaseline="alphabetic";
