@@ -1,0 +1,353 @@
+# halden-chief-of-staff
+
+A locally hosted AI chief of staff that runs on a Windows desktop. It types,
+it speaks, it listens hands free, it shows a face as a transparent desktop
+widget, and it remembers across sessions through a file based memory vault.
+
+Built by **Dr. Reginald Finley**.
+
+The agent runs on Claude Code. The voice, face, memory and gesture components
+are open source packages written by Jared Rhodenizer. My work here is the
+integration: assembling the stack, writing the agent's operating rules and
+persona, tuning the configuration, building a desktop widget that the stack
+did not have, and debugging the parts that did not work on this hardware.
+
+**This repository holds my work only.** Jared Rhodenizer's packages are not
+redistributed here. `install.ps1` clones them from his repositories at pinned
+commits, then copies my modified files over them. The five modified files live
+in `overlay/`, each keeping his copyright notice and license header.
+
+## Why it exists
+
+Most assistant setups stop at a chat box. This one was built to hold a working
+role. It owns the systems it runs on, it keeps its own memory current, and its
+operating rules require it to argue when the reasoning is weak rather than
+agree by default. The interesting engineering is in the parts that make a
+voice interface usable for long stretches: knowing which microphone to open,
+knowing when a sentence has actually ended, and knowing when the speech
+recognizer is inventing words out of silence.
+
+## Demo
+
+![The face widget running on the desktop](face-widget/face-widget-running.png)
+
+The ring is a frameless, always on top window with real per pixel
+transparency. It idles, listens, thinks and speaks in step with the live voice
+line.
+
+## Hardware required
+
+| Part | Why |
+| --- | --- |
+| Windows 11 machine | The widget and the launchers are Windows specific. The upstream packages also run on macOS and Linux. |
+| Microphone | A headset or a USB desk microphone. Headphones matter: with open speakers the agent hears its own voice and interrupts itself. |
+| NVIDIA GPU | Optional. Speech recognition runs on CPU without one. |
+| Webcam | Optional, for the hand tracking board only. |
+
+## Software required
+
+| Software | Version this runs on |
+| --- | --- |
+| Python | 3.12.2 |
+| git | Required by the install script |
+| uv | 0.12.6, used by the voice line |
+| Claude Code | The agent runtime |
+| PySide6 | 6.11.2, the face widget only |
+| Chrome | Required by the hand tracking board |
+| NVIDIA CUDA runtime | Optional, via the `nvidia-*-cu12` pip wheels |
+
+The upstream packages are pinned to exact commits in the install script, so a
+fresh install matches the versions this was built and tested against. The
+widget pins its one dependency in `face-widget/requirements.txt`.
+
+## Installation
+
+1. Clone this repository and fetch the upstream packages:
+
+   ```
+   git clone https://github.com/YOURNAME/halden-chief-of-staff
+   cd halden-chief-of-staff
+   powershell -ExecutionPolicy Bypass -File install.ps1
+   ```
+
+   On macOS or Linux, run `./install.sh` instead. The face widget is Windows
+   only; everything else is cross platform.
+
+   The script clones `backtalk`, `ai-visualizer`, `barehands`,
+   `fullstack-agent` and `ai-memory-vault` at the pinned commits listed under
+   Credits, then copies the files in `overlay/` over them. Re-running it is
+   safe: a package already present is left alone and only the overlay is
+   reapplied. Pass `-Force` to delete and re-clone.
+
+2. Create the voice line environment:
+
+   ```
+   cd backtalk
+   uv sync
+   ```
+
+3. Create the widget environment:
+
+   ```
+   cd face-widget
+   python -m venv .venv
+   .venv\Scripts\pip install -r requirements.txt
+   ```
+
+4. Copy each config from `config-examples/` to the component that reads it,
+   then edit it:
+
+   ```
+   config-examples/backtalk.json.example       ->  backtalk/backtalk.json
+   config-examples/ai-visualizer.json.example  ->  ai-visualizer/ai-visualizer.json
+   config-examples/barehands.json.example      ->  barehands/barehands.json
+   config-examples/face-widget.json.example    ->  face-widget/face-widget.json
+   ```
+
+   Every path in those files is a placeholder. `<AGENT_DIR>` is wherever you
+   cloned this. `<VAULT_PATH>` is wherever you keep the memory vault, which
+   belongs outside this repository.
+
+5. Copy `CLAUDE.md` into your agent folder and fill in the placeholders. It is
+   the operating file. Four placeholders set how the agent addresses you:
+
+   | Placeholder | What it is | Example |
+   | --- | --- | --- |
+   | `{OWNER_NAME}` | Full formal name | `Dr. Jane Okonkwo` |
+   | `{OWNER_WRITTEN}` | How it addresses you in text | `Dr. Okonkwo` |
+   | `{OWNER_SHORT}` | The informal form | `Jane` |
+   | `{OWNER_SPOKEN}` | The spoken form, spelt out | `Doctor Okonkwo` |
+
+   `{OWNER_SPOKEN}` is separate on purpose. An abbreviation ending in a full
+   stop is read as the end of a sentence by the speech engine, so the name
+   arrives in two pieces with an audible gap. The file also uses he and his
+   throughout, and a few sections are written as templates with a note saying
+   what to replace. Read it once before using it.
+
+6. Set up the memory vault by following `ai-memory-vault/README.md`, which the
+   install script fetched.
+
+7. Optional: copy `.env.example` to `.env` and add an ElevenLabs key.
+
+Then run `fullstack-agent\start.bat`, or `start.bat voice` for the face and
+voice without the hand board.
+
+## Configuration
+
+Secrets live in `.env`, which is gitignored. See `.env.example` for the list.
+The ElevenLabs API key is the only secret in the stack, and it is optional:
+without it the voice line uses a local Kokoro voice that needs no account.
+
+The key is never stored in a config file. On Windows it is read from the
+`ELEVENLABS_API_KEY` environment variable. On macOS it comes from the Keychain
+item `backtalk-elevenlabs`, and on Linux from secret-tool.
+
+Per machine settings live in the four JSON files listed above. They are
+gitignored, which is also how upstream treats them, so an update never
+overwrites your setup.
+
+## Usage
+
+Typed session, from the agent folder:
+
+```
+claude
+```
+
+The agent reads its operating file on start and opens with a one line
+greeting. Claude Code waits for your first message before it responds, so the
+greeting arrives in reply to your first line rather than on launch.
+
+Voice session:
+
+```
+fullstack-agent\start.bat voice
+```
+
+The face widget and the voice line both start. After the models load it speaks
+its greeting and listens. Settings change by spoken phrase during a session:
+"push to talk mode", "go hands free", "stop asking for permission", "switch to
+the deep model". Say "goodbye" followed by the agent's name to hang up.
+
+## Project layout
+
+What this repository ships:
+
+```
+install.ps1           Fetches upstream at pinned commits, applies the overlay
+install.sh            The same, for macOS and Linux
+overlay/              My five modified files, in their upstream paths
+CLAUDE.md             Operating rules and persona, for Claude Code
+AGENTS.md             The same file for Codex
+face-widget/          Transparent desktop widget. My work.
+config-examples/      Placeholder configs for every component
+.claude/settings.json Command allowlist for the agent's own harness
+.env.example          The one optional secret
+```
+
+What the install script adds, fetched from Jared Rhodenizer's repositories and
+gitignored here:
+
+```
+backtalk/             Voice line
+ai-visualizer/        Animated faces
+barehands/            Webcam hand tracking board
+fullstack-agent/      Launcher
+ai-memory-vault/      Memory system
+```
+
+## Credits
+
+Integration, configuration, persona and debugging: **Dr. Reginald Finley**.
+That is the work in this repository.
+
+The voice, face, memory and gesture packages are the work of
+**Jared Rhodenizer**. I did not write them, and this repository does not
+redistribute them. The install script fetches each one from his repository at
+the commit my modifications were written against.
+
+| Package | Author | Upstream | Pinned commit | License |
+| --- | --- | --- | --- | --- |
+| backtalk | Jared Rhodenizer | https://github.com/jaredrhod/backtalk | `17353c66` | AGPL-3.0-or-later |
+| ai-visualizer | Jared Rhodenizer | https://github.com/jaredrhod/ai-visualizer | `dd109df7` | AGPL-3.0-or-later |
+| barehands | Jared Rhodenizer | https://github.com/jaredrhod/barehands | `bdd8df50` | AGPL-3.0-or-later |
+| fullstack-agent | Jared Rhodenizer | https://github.com/jaredrhod/fullstack-agent | `d3c7374c` | AGPL-3.0-or-later |
+| ai-memory-vault | Jared Rhodenizer | https://github.com/jaredrhod/ai-memory-vault | `d16ba5a6` | CC BY-SA 4.0 |
+
+His work also includes the four animated faces, the signal bus that links the
+face to the voice line, and the spoken console that changes settings mid
+session. Go to his repositories for the canonical versions and the full
+license text for each.
+
+Other components: Claude Code and the Claude Agent SDK by Anthropic,
+faster-whisper and CTranslate2 for speech recognition, Kokoro-82M for local
+speech synthesis, webrtcvad and Silero for voice activity detection, MediaPipe
+and three.js inside the hand board, Qt and QtWebEngine through PySide6 in the
+widget, and the VT323 typeface by The VT323 Project Authors.
+
+## Modifications
+
+My contribution is integration, configuration, persona and debugging. The code
+changes below are all of it. The five modified files are in `overlay/`, each
+carrying Jared Rhodenizer's copyright notice and license header from the file
+it was derived from. The install script copies them over the pinned upstream
+checkout.
+
+### New component: face-widget
+
+The stack renders its faces as browser pages. I wanted the face floating over
+the desktop, so I wrote `face-widget/widget.py`, a frameless, always on top
+PySide6 window with real per pixel transparency. It loads a face from the
+running visualizer server, so it rides the same signal bus the browser faces
+ride and needs no separate wiring. It carries a tray icon, a right click menu
+for size, opacity and position, drag anywhere movement, single instance
+locking, and saved positions validated against the monitors that currently
+exist.
+
+PySide6 was the choice because the cheaper options fail. pywebview can host
+WebView2 in three lines, but its Windows host paints an opaque background
+behind the browser that cannot be removed, because WebView2 composites through
+DirectComposition and ignores colour keying. Qt renders the page into a
+surface it owns, so translucency has something to act on. The reasoning is
+written up in `face-widget/README.md`.
+
+This component is entirely mine and depends on nothing of his at the source
+level. It talks to his visualizer over HTTP and the file based signal bus.
+
+### Visual display: a transparent face
+
+The four faces all paint a full bleed background, which gives an opaque
+rectangle in a transparent window. I added
+`overlay/ai-visualizer/faces/radial-widget/`, derived from Jared Rhodenizer's
+radial face with the background removed. It is a new folder rather than an
+edit to his, because the server discovers faces by scanning the folder, so a
+new one never collides with an upstream update.
+
+Eleven changes from the original, listed in full in the file's own header: a
+transparent background and a move cursor, sound disabled so the voice line
+owns the thinking sound, the galaxy backdrop deleted, a clearRect in place of
+the background fill, the alert wash confined to a circle instead of covering
+the canvas, a semi transparent backing disc behind the orb so it keeps
+contrast over a bright desktop, the fullscreen key removed, corner labels
+hidden at small sizes, and a scale factor so the drawing fits inside the
+canvas instead of overshooting its edges.
+
+The file keeps his copyright notice and AGPL header. `face.json` beside it is
+new, and holds the face's title and description for the gallery.
+
+### Voice line: backtalk
+
+Five fixes, all of them found by debugging a stack that appeared to work.
+They touch `config.py`, `ears.py` and `main.py`.
+
+**Microphone selection.** `mic_device` chooses an input by name fragment, or by
+a list of fragments tried in order, and logs the choice. Windows does not move
+the default input when a USB microphone is plugged in, so a desk microphone
+can sit idle while the laptop's internal one listens. That presents as a
+transcription problem rather than a device problem.
+
+**Dead microphone detection.** `check_input_level` samples the input for 400
+milliseconds at startup and reports the noise floor. A live condenser in a real
+room floors around -60 to -70 dBFS. A muted device reads about -97. Every
+downstream signal treats those two cases identically, so a muted microphone
+produces an agent that transcribes nothing while appearing healthy.
+
+**CUDA library loading.** `_add_cuda_dll_dirs` puts the pip installed NVIDIA
+runtime on the Windows DLL search path. CTranslate2 links cuBLAS and cuDNN by
+name, and the `nvidia-*-cu12` wheels install them where Windows does not look.
+Without it the open microphone fails with a missing `cublas64_12.dll`, and
+nothing else in the error explains why.
+
+**Turn endpointing.** The silence threshold that closes a spoken turn was fixed
+at 480 milliseconds in the source. A pause mid sentence was read as the end of
+the turn, so sentences arrived in fragments and the agent replied to half of
+one. It is now `vad_silence_ms` in the config, alongside `vad_aggressiveness`,
+barge in with a level threshold in dBFS, and two guards against speech
+recognition hallucinations: a Silero filter so whisper never sees the silence,
+and a no speech probability ceiling that discards the caption phrases whisper
+writes onto room noise.
+
+**Voice permission gate.** The spoken approval check accepted only exact
+phrases, so ordinary spoken approvals failed and were scored as refusals. An
+answer now approves when it leads with an affirmative and carries no qualifier
+or negation anywhere in it. A qualified yes still goes back for a plain answer,
+an unclear answer is asked again rather than denied, and a denial now states
+that it is a refusal rather than leaving the model to guess. It had guessed
+wrongly, reporting a working calendar connector as unauthorised.
+
+### Launcher: fullstack-agent
+
+`start.bat` starts the face widget when one is present and falls back to the
+browser visualizer when it is not. It also gained a single instance guard for
+the voice line, ported from the upstream shell script, which already had one.
+Two voice processes answer the same microphone, and the newer one dies without
+saying why.
+
+### Operating rules and persona
+
+`CLAUDE.md` and `AGENTS.md` are mine. They define the agent's identity, manner,
+startup sequence, memory discipline, and the rules that survive context
+compaction. The safety rules are the substance: no financial action without
+case by case approval, evidence before any claim that something is done,
+confirmation before any source edit, full paths named out loud so an approval
+can be checked, and external content treated as data rather than as
+instructions.
+
+## License
+
+**AGPL-3.0-or-later**, for this repository and for my own contributions in it.
+
+`overlay/` holds modified copies of Jared Rhodenizer's AGPL-3.0-or-later code,
+so the whole of this repository carries that license. The `LICENSE` file at the
+root is the AGPL-3.0 text.
+
+`ai-memory-vault` is licensed **CC BY-SA 4.0** by its author rather than AGPL.
+It is not included here. The install script clones it, and its own `LICENSE`
+file governs that directory once fetched.
+
+Using this inside a closed source commercial product is a question for Jared
+Rhodenizer, at the address in his repositories.
+
+## Contact
+
+contact@drreginaldfinley.com

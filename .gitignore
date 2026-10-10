@@ -1,0 +1,49 @@
+# Upstream packages, fetched by install.ps1 / install.sh at pinned commits.
+# They are Jared Rhodenizer's work and are NOT redistributed from this
+# repository. Never commit them.
+/backtalk/
+/ai-visualizer/
+/barehands/
+/fullstack-agent/
+/ai-memory-vault/
+
+# Secrets and personal configuration
+.env
+config.local.*
+
+# Per-machine configs. Copy the matching file from config-examples/ and edit
+# it. Upstream treats these as untracked too, so an update never overwrites
+# your setup.
+backtalk.json
+ai-visualizer.json
+barehands.json
+face-widget/face-widget.json
+
+# Python environments and caches
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Logs
+*.log
+logs/
+
+# Voice line runtime signal bus
+.voice_state
+.voice_waveform
+.voice_loading_pid
+.voice_alert
+.voice_reply_done
+
+# Widget runtime
+.widget.lock
+
+# Private memory vault. The vault lives outside this repository by design
+# and must never be committed.
+vault/
+memory/
+
+# OS
+.DS_Store
+Thumbs.db

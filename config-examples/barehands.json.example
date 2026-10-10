@@ -1,0 +1,9 @@
+{
+  "_comment": "Copy to barehands/barehands.json. Needs a webcam and Chrome. Board is at http://127.0.0.1:8794/stage.html",
+  "name": "YourAgentName",
+  "port": 8794,
+  "orbs": [
+    { "title": "Notes", "path": "sample-notes", "kind": "notes" },
+    { "title": "Props", "path": "media", "kind": "media" }
+  ]
+}

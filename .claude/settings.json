@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-Process*)",
+      "Bash(tasklist*)",
+      "PowerShell(Get-Content*my-agent*.log*)",
+      "Bash(tail*my-agent*.log*)",
+      "Bash(cat*my-agent*.log*)",
+      "Read(<AGENT_DIR>/**/*.log)",
+      "PowerShell(Start-Process*my-agent*)",
+      "PowerShell(Stop-Process -Name python*)",
+      "PowerShell(Stop-Process -Name pythonw*)",
+      "Bash(*face-widget/run.bat*)",
+      "Bash(*face-widget/run.sh*)",
+      "Bash(*face-widget/update.bat*)",
+      "Bash(*face-widget/update.sh*)",
+      "Bash(*ai-visualizer/run.bat*)",
+      "Bash(*ai-visualizer/run.sh*)",
+      "Bash(*ai-visualizer/update.bat*)",
+      "Bash(*ai-visualizer/update.sh*)",
+      "Bash(*backtalk/run.bat*)",
+      "Bash(*backtalk/run.sh*)",
+      "Bash(*barehands/run.bat*)",
+      "Bash(*barehands/run.sh*)"
+    ]
+  }
+}

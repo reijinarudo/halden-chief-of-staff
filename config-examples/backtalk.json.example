@@ -1,0 +1,51 @@
+{
+  "_comment": "Copy to backtalk/backtalk.json and edit. Paths are absolute; there are no defaults for them. The tuning values below are the ones this build settled on after the debugging described in the README; they are starting points, not universals.",
+
+  "agent_dir": "<AGENT_DIR>",
+  "extra_dirs": ["<VAULT_PATH>"],
+  "name": "YourAgentName",
+
+  "_comment_permission": "ask prompts before anything that changes state. bypassPermissions removes that prompt entirely; this build runs it, but do not adopt it until you understand what the agent is allowed to touch.",
+  "permission_mode": "ask",
+
+  "_comment_mic": "mic_device matches a case-insensitive fragment of the device name, or a list tried in order. null takes the Windows default, which is the trap: Windows does not move the default when a USB microphone is plugged in.",
+  "mic_device": ["YourMicNameFragment"],
+  "mic_mode": "open",
+  "ptt_key": "home",
+
+  "_comment_vad": "vad_silence_ms is trailing quiet before a turn closes. 480 was the upstream hardcoded value and cut speech off mid-sentence; 1400 suits a slower speaker. Raise if you are cut off, lower if replies feel delayed.",
+  "vad_silence_ms": 1400,
+  "vad_aggressiveness": 2,
+
+  "_comment_barge": "barge_in lets you talk over the agent. Requires headphones: with open speakers it hears itself and interrupts itself.",
+  "barge_in": true,
+  "barge_min_dbfs": -50.0,
+
+  "_comment_stt": "stt_device cuda requires the NVIDIA CUDA runtime wheels. Use auto or cpu if you do not have them.",
+  "stt_model": "medium.en",
+  "stt_device": "auto",
+  "stt_compute": "int8",
+  "stt_vad_filter": true,
+  "stt_no_speech_max": 0.6,
+
+  "_comment_voice": "voice is the local Kokoro voice, used when ElevenLabs is off or unreachable. The ElevenLabs API key is NEVER stored here: it comes from the ELEVENLABS_API_KEY environment variable on Windows, or the OS keychain on macOS and Linux. See .env.example.",
+  "voice": "bm_lewis",
+  "speed": 1.0,
+  "elevenlabs": {
+    "enabled": false,
+    "voice_id": "<YOUR_ELEVENLABS_VOICE_ID>",
+    "voice_note": "Pick a voice in your own ElevenLabs library and paste its id here."
+  },
+
+  "signals_dir": "",
+  "barehands_state_dir": "<AGENT_DIR>/barehands/state",
+  "thinking_sound": "assets/thinking.wav",
+
+  "_comment_speech": "Spell out abbreviations in spoken text. A full stop in Dr. is read as a sentence end and the name arrives in two pieces with a gap.",
+  "greeting": "Voice line online, Doctor Example. How can I help you today?",
+  "greeting_open_mic": "Voice line online, Doctor Example. Hands-free listening is active. How can I help you today?",
+  "signoff": "Voice line closing, Doctor Example.",
+
+  "_comment_quit": "Add the ways speech-to-text actually mishears your agent's name. The full list in this build has about 50 entries for one name.",
+  "quit_phrases": ["goodbye youragentname", "hang up", "end voice mode"]
+}

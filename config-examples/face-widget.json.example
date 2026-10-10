@@ -1,0 +1,11 @@
+{
+  "_comment": "Copy to face-widget/face-widget.json. face must be a transparent face or you get an opaque rectangle; radial-widget is the one included here. pos_x and pos_y are saved by the widget itself, so leave them null on a first run.",
+  "face": "radial-widget",
+  "port": 8790,
+  "size": 450,
+  "pos_x": null,
+  "pos_y": null,
+  "always_on_top": true,
+  "autostart_server": true,
+  "opacity": 1.0
+}

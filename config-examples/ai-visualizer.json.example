@@ -1,0 +1,9 @@
+{
+  "_comment": "Copy to ai-visualizer/ai-visualizer.json. bus_dir must point at your backtalk checkout: that is how the face reads the live conversation state.",
+  "name": "YOURAGENTNAME",
+  "badge": "",
+  "face": "radial",
+  "port": 8790,
+  "bus_dir": "<AGENT_DIR>/backtalk",
+  "thinking_sound": true
+}
