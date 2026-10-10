@@ -135,7 +135,8 @@ including the typed agent and the `/model` command. See Troubleshooting.
    belongs outside this repository.
 
 5. Copy `CLAUDE.md` into your agent folder and fill in the placeholders. It is
-   the operating file. Four placeholders set how the agent addresses you:
+   the operating file. Five placeholders need filling in. Four set how the
+   agent addresses you:
 
    | Placeholder | What it is | Example |
    | --- | --- | --- |
@@ -143,6 +144,10 @@ including the typed agent and the `/model` command. See Troubleshooting.
    | `{OWNER_WRITTEN}` | How it addresses you in text | `Dr. Okonkwo` |
    | `{OWNER_SHORT}` | The informal form | `Jane` |
    | `{OWNER_SPOKEN}` | The spoken form, spelt out | `Doctor Okonkwo` |
+
+   The fifth is `{WEBCAM_DEVICE}`, your webcam as DirectShow names it, used by
+   the camera section. Find yours with
+   `ffmpeg -list_devices true -f dshow -i dummy`.
 
    `{OWNER_SPOKEN}` is separate on purpose. An abbreviation ending in a full
    stop is read as the end of a sentence by the speech engine, so the name
@@ -512,6 +517,28 @@ case by case approval, evidence before any claim that something is done,
 confirmation before any source edit, full paths named out loud so an approval
 can be checked, and external content treated as data rather than as
 instructions.
+
+**Three ways to show it something,** none of which needs a connector. Speaking
+a URL aloud is unusable, so the operating file gives it three channels, all
+built on tools it already has:
+
+| Say | It runs | Then |
+| --- | --- | --- |
+| "read what I just copied" | `Get-Clipboard` in PowerShell | fetches a URL, or uses the text directly |
+| "look at this" | `Graphics.CopyFromScreen` to a temp PNG | reads the image |
+| "take a picture" | `ffmpeg -f dshow` for one webcam frame | reads the image |
+
+The `Read` tool displays images, so the capture is the only part that needed
+writing. No MCP server, no browser extension, nothing installed beyond ffmpeg.
+
+The constraints matter more than the mechanics, and they are in the file:
+captures go to a temp path and never into a project folder, the agent says what
+it found before acting so a stale clipboard is caught early, a credential in
+the clipboard is reported and never repeated or written anywhere, and the
+camera opens on an explicit request only, one frame, never ambiently. The file
+also states that a live feed is separate undefined scope rather than an
+extension of the single frame rule, so that door is closed deliberately rather
+than by omission.
 
 ## License
 
