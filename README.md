@@ -29,7 +29,7 @@ recognizer is inventing words out of silence.
 
 ## Demo
 
-![The face widget running on the desktop](face-widget/face-widget-running.png)
+<img src="face-widget/face-widget-running.png" width="400" alt="The face widget on the desktop, showing agent state, memory, GPU, and CPU in the corner labels">
 
 The ring is a frameless, always on top window with real per pixel
 transparency. It idles, listens, thinks and speaks in step with the live voice
