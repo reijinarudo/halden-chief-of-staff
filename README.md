@@ -14,7 +14,7 @@ did not have, and debugging the parts that did not work on this hardware.
 
 **This repository holds my work only.** Jared Rhodenizer's packages are not
 redistributed here. `install.ps1` clones them from his repositories at pinned
-commits, then copies my modified files over them. The five modified files live
+commits, then copies my modified files over them. The six modified files live
 in `overlay/`, each keeping his copyright notice and license header.
 
 ## Why it exists
@@ -51,7 +51,7 @@ line.
 | Python | 3.12.2 |
 | git | Required by the install script |
 | uv | 0.12.6, used by the voice line |
-| Claude Code | The agent runtime |
+| Claude Code | The agent runtime, and it must be signed in. See below. |
 | PySide6 | 6.11.2, the face widget only |
 | Chrome | Required by the hand tracking board |
 | NVIDIA CUDA runtime | Optional, via the `nvidia-*-cu12` pip wheels |
@@ -59,6 +59,26 @@ line.
 The upstream packages are pinned to exact commits in the install script, so a
 fresh install matches the versions this was built and tested against. The
 widget pins its one dependency in `face-widget/requirements.txt`.
+
+### You need your own Claude Code account
+
+This project is everything built around Claude Code. It is not a separate AI.
+When you speak, the audio is recorded and transcribed on your own machine, the
+text is handed to a Claude Code session, and that session's answer is spoken
+back. The thinking step is Claude Code, so it needs your account and an active
+login, exactly like any other Claude Code session.
+
+Check that you are signed in before installing anything:
+
+```
+claude -p "Reply with exactly: AUTH_OK"
+```
+
+`AUTH_OK` means you are set. Anything else, run `claude`, then type `/login`
+and follow the browser prompt.
+
+Logins expire. When yours does, every part of this stops answering at once,
+including the typed agent and the `/model` command. See Troubleshooting.
 
 ## Installation
 
@@ -176,7 +196,7 @@ What this repository ships:
 ```
 install.ps1           Fetches upstream at pinned commits, applies the overlay
 install.sh            The same, for macOS and Linux
-overlay/              My five modified files, in their upstream paths
+overlay/              My six modified files, in their upstream paths
 CLAUDE.md             Operating rules and persona, for Claude Code
 AGENTS.md             The same file for Codex
 face-widget/          Transparent desktop widget. My work.
@@ -195,6 +215,80 @@ barehands/            Webcam hand tracking board
 fullstack-agent/      Launcher
 ai-memory-vault/      Memory system
 ```
+
+## Troubleshooting
+
+The log is `backtalk/logs/backtalk.log`. Read it first. It records what it
+heard, what it said, and which microphone it opened.
+
+### It hears me but never answers
+
+The log shows your words transcribed correctly under `[you]`, then no reply
+and no error. The face animates, the microphone works, nothing complains.
+
+This is almost always an expired Claude Code login. Check it:
+
+```
+claude -p "Reply with exactly: AUTH_OK"
+```
+
+If that prints an authentication error instead, run `claude`, type `/login`,
+and sign in. Then restart the voice line.
+
+An expired login takes down the typed agent, the `/model` command and the
+spoken agent at the same moment, so if all three stopped together, this is
+why. It reads as a microphone fault because the transcripts are perfect and
+the only broken link is the one that thinks.
+
+Older versions failed silently here. The patched `brain.py` in `overlay/`
+speaks the error aloud instead, so you should now hear the reason rather than
+guess at it.
+
+### Nothing is heard at all
+
+Check which microphone it opened. The log names it at startup:
+
+```
+[ears] microphone: Microphone (HyperX Quadcast)
+[ears] input floor -65 dBFS
+```
+
+Windows does not move the default input when you plug in a USB microphone, so
+it can quietly listen to the wrong one. Set `mic_device` in `backtalk.json` to
+a fragment of the name you want.
+
+A floor near -97 dBFS means the device is muted or its gain is at minimum. A
+live microphone in a quiet room reads about -60 to -70.
+
+### It cuts me off mid sentence
+
+Raise `vad_silence_ms` in `backtalk.json`. It is how much silence ends your
+turn. Pausing to think costs you the rest of the sentence when it is too low.
+
+### It interrupts itself, or replies to its own voice
+
+Wear headphones, or set `barge_in` to false. There is no echo cancellation, so
+on open speakers the microphone hears the agent and treats it as you talking
+over it.
+
+### A grey or black square instead of a ring
+
+The widget is pointed at a face that paints a background. Set `face` to
+`radial-widget` in `face-widget.json`.
+
+### The console window has vanished
+
+On a multi monitor setup it can open off screen. It is still running. Check
+the taskbar, or just launch again: the single instance guard in `start.bat`
+clears the old session before starting the new one.
+
+### Stopping it
+
+Say "goodbye" followed by the agent's name, or close the console window.
+
+**Reload face** in the widget menu only redraws the ring. It does not reload
+the agent, its settings, its personality file, or your login. After any change
+other than the ring's appearance, close and relaunch.
 
 ## Credits
 
@@ -228,7 +322,7 @@ widget, and the VT323 typeface by The VT323 Project Authors.
 ## Modifications
 
 My contribution is integration, configuration, persona and debugging. The code
-changes below are all of it. The five modified files are in `overlay/`, each
+changes below are all of it. The six modified files are in `overlay/`, each
 carrying Jared Rhodenizer's copyright notice and license header from the file
 it was derived from. The install script copies them over the pinned upstream
 checkout.
@@ -277,8 +371,8 @@ new, and holds the face's title and description for the gallery.
 
 ### Voice line: backtalk
 
-Five fixes, all of them found by debugging a stack that appeared to work.
-They touch `config.py`, `ears.py` and `main.py`.
+Six fixes, all of them found by debugging a stack that appeared to work.
+They touch `config.py`, `ears.py`, `main.py` and `brain.py`.
 
 **Microphone selection.** `mic_device` chooses an input by name fragment, or by
 a list of fragments tried in order, and logs the choice. Windows does not move
@@ -314,6 +408,26 @@ or negation anywhere in it. A qualified yes still goes back for a plain answer,
 an unclear answer is asked again rather than denied, and a denial now states
 that it is a refusal rather than leaving the model to guess. It had guessed
 wrongly, reporting a working calendar connector as unauthorised.
+
+**Silent failures now speak.** A failed turn comes back from the Agent SDK as
+one synthetic message carrying an `error` field, with its explanation in
+content blocks rather than in the streaming text events. The streaming path is
+the only thing that produces speech, so a failure of that shape ended the turn
+having said nothing, which looks exactly like an agent that chose not to
+answer. An expired login failed every turn in 174 milliseconds this way and
+read as a microphone fault for days: the transcripts were perfect, the audio
+chain was healthy, and the log recorded the question and no reply.
+
+`ask_stream` now tracks whether a turn produced any speech, surfaces an
+error carrying message as a spoken sentence with the error code logged
+beside it, and keeps a backstop on the result message for a failure that
+never produces a message of its own. The backstop is guarded on the same
+flag, so a normal turn is never spoken twice. Diagnosis came from dumping
+the raw SDK message stream rather than from reading the symptom, which
+pointed at the microphone every time.
+
+This one is in upstream's `brain.py`, which was otherwise unmodified, and it
+affects anyone whose session expires mid use. It is worth sending back to him.
 
 ### Launcher: fullstack-agent
 
